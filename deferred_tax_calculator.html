@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Deferred Tax Calculator — DTA / DTL</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #0d0f14;
+    --surface: #151820;
+    --surface2: #1c2030;
+    --border: #252a3a;
+    --border2: #2e3448;
+    --text: #e8eaf0;
+    --text2: #8a90a8;
+    --text3: #5a6080;
+    --accent: #4f7cff;
+    --accent-dim: rgba(79,124,255,0.12);
+    --green: #22c55e;
+    --green-dim: rgba(34,197,94,0.12);
+    --red: #ef4444;
+    --red-dim: rgba(239,68,68,0.12);
+    --amber: #f59e0b;
+    --amber-dim: rgba(245,158,11,0.12);
+    --radius: 10px;
+    --radius-sm: 6px;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ---- LAYOUT ---- */
+  .app-header {
+    border-bottom: 1px solid var(--border);
+    padding: 14px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon {
+    width: 34px; height: 34px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .logo-text { font-weight: 700; font-size: 15px; letter-spacing: -0.3px; }
+  .logo-sub { font-size: 11px; color: var(--text3); letter-spacing: 0.5px; text-transform: uppercase; }
+
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+
+  .main { display: grid; grid-template-columns: 340px 1fr; min-height: calc(100vh - 57px); }
+
+  /* ---- SIDEBAR ---- */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 20px;
+    overflow-y: auto;
+    height: calc(100vh - 57px);
+    position: sticky;
+    top: 57px;
+  }
+
+  .content { padding: 24px 28px; overflow-x: auto; }
+
+  /* ---- FORM ELEMENTS ---- */
+  .section-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 12px;
+    margin-top: 20px;
+  }
+  .section-label:first-child { margin-top: 0; }
+
+  .field { margin-bottom: 14px; }
+  label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 5px; font-weight: 500; }
+
+  input[type="text"], input[type="number"], input[type="date"], select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    padding: 8px 10px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input[type="text"]:focus, input[type="number"]:focus,
+  input[type="date"]:focus, select:focus {
+    border-color: var(--accent);
+  }
+  input[type="date"] { color-scheme: dark; }
+  select option { background: var(--surface2); }
+
+  .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  .radio-group { display: flex; gap: 6px; }
+  .radio-opt {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    gap: 5px;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-sm);
+    padding: 7px 6px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text2);
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .radio-opt input { display: none; }
+  .radio-opt.active { border-color: var(--accent); background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+
+  /* ---- BUTTONS ---- */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #3d6aee; }
+  .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border2); }
+  .btn-ghost:hover { background: var(--surface2); color: var(--text); }
+  .btn-green { background: var(--green-dim); color: var(--green); border: 1px solid rgba(34,197,94,0.2); }
+  .btn-green:hover { background: rgba(34,197,94,0.2); }
+  .btn-sm { padding: 6px 10px; font-size: 11px; }
+
+  /* ---- REFERENCE PANEL ---- */
+  .ref-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--amber-dim);
+    border: 1px solid rgba(245,158,11,0.2);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    cursor: pointer;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--amber);
+    user-select: none;
+    transition: background 0.15s;
+  }
+  .ref-toggle:hover { background: rgba(245,158,11,0.18); }
+  .ref-panel {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    margin-bottom: 14px;
+    display: none;
+  }
+  .ref-panel.open { display: block; }
+  .ref-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .ref-row:last-child { border-bottom: none; }
+  .ref-row:hover { background: var(--surface2); }
+  .ref-name { color: var(--text2); }
+  .ref-rate { font-family: var(--mono); color: var(--amber); font-weight: 500; }
+  .ref-act { font-size: 10px; color: var(--text3); }
+  .ref-section { padding: 6px 10px; font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text3); background: var(--surface2); font-weight: 600; }
+
+  /* ---- SUMMARY CARDS ---- */
+  .summary-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 24px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .card-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); font-weight: 600; margin-bottom: 6px; }
+  .card-value { font-size: 20px; font-weight: 700; font-family: var(--mono); letter-spacing: -0.5px; }
+  .card-sub { font-size: 11px; color: var(--text3); margin-top: 3px; }
+  .card.green { border-color: rgba(34,197,94,0.25); background: rgba(34,197,94,0.04); }
+  .card.green .card-value { color: var(--green); }
+  .card.red { border-color: rgba(239,68,68,0.25); background: rgba(239,68,68,0.04); }
+  .card.red .card-value { color: var(--red); }
+  .card.blue { border-color: rgba(79,124,255,0.25); background: rgba(79,124,255,0.04); }
+  .card.blue .card-value { color: var(--accent); }
+
+  /* ---- DTA/DTL HERO ---- */
+  .dta-dtl-banner {
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    border: 1px solid;
+  }
+  .dta-dtl-banner.dta { background: var(--green-dim); border-color: rgba(34,197,94,0.3); }
+  .dta-dtl-banner.dtl { background: var(--red-dim); border-color: rgba(239,68,68,0.3); }
+  .dta-dtl-banner.neutral { background: var(--surface); border-color: var(--border); }
+  .banner-left { }
+  .banner-type { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 4px; }
+  .banner-type.dta { color: var(--green); }
+  .banner-type.dtl { color: var(--red); }
+  .banner-amount { font-size: 32px; font-weight: 700; font-family: var(--mono); }
+  .banner-amount.dta { color: var(--green); }
+  .banner-amount.dtl { color: var(--red); }
+  .banner-desc { font-size: 12px; color: var(--text2); margin-top: 4px; max-width: 400px; }
+  .banner-badge {
+    font-size: 11px; font-weight: 600; padding: 4px 10px;
+    border-radius: 20px;
+  }
+  .banner-badge.dta { background: var(--green-dim); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+  .banner-badge.dtl { background: var(--red-dim); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+
+  /* ---- TABLE ---- */
+  .table-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .table-title { font-size: 13px; font-weight: 600; }
+  .table-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  .schedule-wrap {
+    overflow-x: auto;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead tr { background: var(--surface2); }
+  th {
+    padding: 10px 12px;
+    text-align: right;
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text3);
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border2);
+  }
+  th:first-child { text-align: left; }
+  td {
+    padding: 9px 12px;
+    text-align: right;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text2);
+    white-space: nowrap;
+  }
+  td:first-child { text-align: left; font-family: var(--sans); font-weight: 600; color: var(--text); font-size: 12px; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: rgba(255,255,255,0.02); }
+  .dta-cell { color: var(--green) !important; font-weight: 600; }
+  .dtl-cell { color: var(--red) !important; font-weight: 600; }
+  .zero-cell { color: var(--text3) !important; }
+  .positive-diff { color: var(--red) !important; }
+  .negative-diff { color: var(--green) !important; }
+
+  tfoot tr { background: var(--surface2); }
+  tfoot td { color: var(--text) !important; font-weight: 700 !important; border-top: 2px solid var(--border2) !important; border-bottom: none !important; }
+
+  /* ---- EMPTY STATE ---- */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text3);
+  }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-title { font-size: 14px; font-weight: 600; color: var(--text2); margin-bottom: 6px; }
+  .empty-desc { font-size: 12px; }
+
+  /* ---- VALIDATION ---- */
+  .error-msg { font-size: 11px; color: var(--red); margin-top: 4px; display: none; }
+  .field.error input, .field.error select { border-color: var(--red); }
+  .field.error .error-msg { display: block; }
+
+  /* ---- DIVIDER ---- */
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+  /* ---- TOOLTIP ---- */
+  .help { display: inline-flex; align-items: center; justify-content: center;
+    width: 14px; height: 14px; border-radius: 50%; background: var(--surface2);
+    color: var(--text3); font-size: 9px; cursor: help; margin-left: 4px;
+    border: 1px solid var(--border2); font-weight: 700;
+  }
+
+  /* ---- SCROLLBAR ---- */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+  /* ---- PRINT ---- */
+  @media print {
+    .sidebar, .app-header .header-actions, .table-header .btn { display: none; }
+    .main { grid-template-columns: 1fr; }
+    .content { padding: 0; }
+    body { background: #fff; color: #000; }
+    .card, .schedule-wrap, .dta-dtl-banner { border-color: #ccc; }
+  }
+
+  /* ---- RESPONSIVE ---- */
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; }
+    .sidebar { height: auto; position: static; }
+    .summary-grid { grid-template-columns: repeat(2,1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="logo">
+    <div class="logo-icon">📊</div>
+    <div>
+      <div class="logo-text">Deferred Tax Calculator</div>
+      <div class="logo-sub">Ind AS 12 · Companies Act 2013 · Income Tax Act 1961</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ Download CSV</button>
+    <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨 Print to PDF</button>
+    <button class="btn btn-primary btn-sm" onclick="calculate()">Recalculate</button>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+
+    <div class="section-label">Asset Details</div>
+    <div class="field" id="f-name">
+      <label>Asset Name</label>
+      <input type="text" id="assetName" placeholder="e.g. Machinery – Unit 3" oninput="calculate()"/>
+      <div class="error-msg">Please enter a name.</div>
+    </div>
+    <div class="field" id="f-cost">
+      <label>Original Cost (₹)</label>
+      <input type="number" id="cost" placeholder="10,00,000" min="1" oninput="calculate()"/>
+      <div class="error-msg">Must be a positive number.</div>
+    </div>
+    <div class="field" id="f-dop">
+      <label>Date of Purchase</label>
+      <input type="date" id="dop" oninput="calculate()"/>
+      <div class="error-msg">Please select a date.</div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="section-label">Accounting Depreciation (Companies Act 2013)</div>
+
+    <div class="field">
+      <label>Method</label>
+      <div class="radio-group">
+        <label class="radio-opt active" id="opt-slm">
+          <input type="radio" name="method" value="SLM" checked onchange="switchMethod(this)"/> SLM
+        </label>
+        <label class="radio-opt" id="opt-wdv">
+          <input type="radio" name="method" value="WDV" onchange="switchMethod(this)"/> WDV
+        </label>
+      </div>
+    </div>
+
+    <div id="life-field" class="field" id="f-life">
+      <label>Useful Life (years) <span class="help" title="As per Schedule II, Companies Act 2013">?</span></label>
+      <input type="number" id="usefulLife" placeholder="15" min="1" max="100" oninput="calculate()"/>
+      <div class="error-msg">Enter years between 1–100.</div>
+    </div>
+    <div id="rate-field" class="field" style="display:none">
+      <label>WDV Rate % (Book)</label>
+      <input type="number" id="bookRate" placeholder="e.g. 13.91" min="0.01" max="100" step="0.01" oninput="calculate()"/>
+    </div>
+
+    <div class="field" id="f-rv">
+      <label>Residual Value ₹ (default: 5% of cost)</label>
+      <input type="number" id="residual" placeholder="Auto (5%)" min="0" oninput="calculate()"/>
+    </div>
+
+    <div class="divider"></div>
+    <div class="section-label">Tax Depreciation (Income Tax Act 1961 – WDV)</div>
+    <div class="field" id="f-taxrate">
+      <label>Block Rate % <span class="help" title="Section 32, Income Tax Act 1961. WDV method mandatory.">?</span></label>
+      <input type="number" id="taxRate" placeholder="15" min="0" max="100" step="0.01" oninput="calculate()"/>
+      <div class="error-msg">Enter a value between 0–100.</div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="section-label">Corporate Tax Rate</div>
+    <div class="field" id="f-ctrate">
+      <label>Effective Tax Rate % <span class="help" title="Include surcharge & cess. Default domestic: 25.168%">?</span></label>
+      <input type="number" id="ctRate" placeholder="25.168" min="0" max="60" step="0.001" oninput="calculate()"/>
+      <div class="error-msg">Enter a value between 0–60.</div>
+    </div>
+    <div class="field">
+      <label>Preset Tax Regime</label>
+      <select onchange="setTaxRegime(this.value)">
+        <option value="">— Select —</option>
+        <option value="25.168">Domestic Co. (Sec 115BA) — 25.168%</option>
+        <option value="22.368">Domestic Co. (Sec 115BAA) — 22.368%</option>
+        <option value="17.01">New Mfg Co. (Sec 115BAB) — 17.01%</option>
+        <option value="30.9">Regular Co. (>₹10Cr turnover) — 30.9%</option>
+      </select>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- REFERENCE PANEL -->
+    <div class="ref-toggle" onclick="toggleRef()">
+      <span>📋 Tax Rate Reference (IT Act 1961)</span>
+      <span id="ref-arrow">▼</span>
+    </div>
+    <div class="ref-panel" id="refPanel">
+      <div class="ref-section">Buildings</div>
+      <div class="ref-row" onclick="applyRef(5)"><span class="ref-name">RCC / Brick Buildings</span><span><span class="ref-rate">5%</span></span></div>
+      <div class="ref-row" onclick="applyRef(10)"><span class="ref-name">Temp / Non-RCC Buildings</span><span><span class="ref-rate">10%</span></span></div>
+
+      <div class="ref-section">Plant & Machinery</div>
+      <div class="ref-row" onclick="applyRef(15)"><span class="ref-name">General P&M</span><span><span class="ref-rate">15%</span></span></div>
+      <div class="ref-row" onclick="applyRef(30)"><span class="ref-name">Motor Cars</span><span><span class="ref-rate">30%</span></span></div>
+      <div class="ref-row" onclick="applyRef(45)"><span class="ref-name">Ships</span><span><span class="ref-rate">20%</span> / <span class="ref-rate">45%</span></span></div>
+      <div class="ref-row" onclick="applyRef(60)"><span class="ref-name">Aircraft</span><span><span class="ref-rate">60%</span></span></div>
+
+      <div class="ref-section">Computers & IT</div>
+      <div class="ref-row" onclick="applyRef(40)"><span class="ref-name">Computers &amp; Software</span><span><span class="ref-rate">40%</span></span></div>
+
+      <div class="ref-section">Furniture & Fittings</div>
+      <div class="ref-row" onclick="applyRef(10)"><span class="ref-name">Furniture &amp; Fittings</span><span><span class="ref-rate">10%</span></span></div>
+
+      <div class="ref-section">Intangibles</div>
+      <div class="ref-row" onclick="applyRef(25)"><span class="ref-name">Patents / Know-how / IP</span><span><span class="ref-rate">25%</span></span></div>
+    </div>
+
+    <!-- COMPANIES ACT REFERENCE -->
+    <div class="ref-toggle" onclick="toggleRef2()" style="margin-top:8px">
+      <span>📘 Schedule II Useful Life</span>
+      <span id="ref-arrow2">▼</span>
+    </div>
+    <div class="ref-panel" id="refPanel2">
+      <div class="ref-section">Buildings</div>
+      <div class="ref-row" onclick="applyLife(60)"><span class="ref-name">RCC Buildings</span><span><span class="ref-rate">60 yrs</span></span></div>
+      <div class="ref-row" onclick="applyLife(30)"><span class="ref-name">Non-RCC Buildings</span><span><span class="ref-rate">30 yrs</span></span></div>
+
+      <div class="ref-section">Plant & Machinery</div>
+      <div class="ref-row" onclick="applyLife(15)"><span class="ref-name">General P&M</span><span><span class="ref-rate">15 yrs</span></span></div>
+      <div class="ref-row" onclick="applyLife(8)"><span class="ref-name">Motor Cars</span><span><span class="ref-rate">8 yrs</span></span></div>
+      <div class="ref-row" onclick="applyLife(5)"><span class="ref-name">Aircraft</span><span><span class="ref-rate">20 yrs</span></span></div>
+
+      <div class="ref-section">Computers & IT</div>
+      <div class="ref-row" onclick="applyLife(3)"><span class="ref-name">Computers &amp; IT</span><span><span class="ref-rate">3 yrs</span></span></div>
+
+      <div class="ref-section">Furniture</div>
+      <div class="ref-row" onclick="applyLife(10)"><span class="ref-name">Furniture &amp; Fittings</span><span><span class="ref-rate">10 yrs</span></span></div>
+      <div class="ref-row" onclick="applyLife(5)"><span class="ref-name">Vehicles (other)</span><span><span class="ref-rate">8–10 yrs</span></span></div>
+    </div>
+
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="content" id="mainContent">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">🧾</div>
+      <div class="empty-title">No Asset Configured Yet</div>
+      <div class="empty-desc">Fill in the asset details on the left to generate a Deferred Tax Schedule.</div>
+    </div>
+
+    <div id="results" style="display:none">
+      <!-- DTA/DTL BANNER -->
+      <div class="dta-dtl-banner neutral" id="dtaBanner">
+        <div class="banner-left">
+          <div class="banner-type" id="bannerType">—</div>
+          <div class="banner-amount" id="bannerAmount">₹0</div>
+          <div class="banner-desc" id="bannerDesc"></div>
+        </div>
+        <div>
+          <span class="banner-badge" id="bannerBadge"></span>
+        </div>
+      </div>
+
+      <!-- SUMMARY CARDS -->
+      <div class="summary-grid">
+        <div class="card blue">
+          <div class="card-label">Carrying Amount (CA)</div>
+          <div class="card-value" id="cardCA">₹0</div>
+          <div class="card-sub">Cost − Accum. Book Dep.</div>
+        </div>
+        <div class="card blue">
+          <div class="card-label">Tax Base (TB)</div>
+          <div class="card-value" id="cardTB">₹0</div>
+          <div class="card-sub">Cost − Accum. Tax Dep.</div>
+        </div>
+        <div class="card" id="cardDiffBox">
+          <div class="card-label">Temporary Difference</div>
+          <div class="card-value" id="cardDiff">₹0</div>
+          <div class="card-sub" id="cardDiffSub">CA − TB</div>
+        </div>
+        <div class="card" id="cardDTBox">
+          <div class="card-label" id="cardDTLabel">Deferred Tax</div>
+          <div class="card-value" id="cardDT">₹0</div>
+          <div class="card-sub" id="cardDTSub">|Diff| × Tax Rate</div>
+        </div>
+      </div>
+
+      <!-- SCHEDULE TABLE -->
+      <div class="table-header">
+        <div>
+          <div class="table-title" id="tableTitle">Deferred Tax Schedule</div>
+          <div class="table-sub" id="tableSub"></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ CSV</button>
+          <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨 PDF</button>
+        </div>
+      </div>
+
+      <div class="schedule-wrap">
+        <table id="scheduleTable">
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th>Opening NBV (Book)</th>
+              <th>Book Dep.</th>
+              <th>Closing NBV (Book)</th>
+              <th>Opening Tax Base</th>
+              <th>Tax Dep.</th>
+              <th>Closing Tax Base</th>
+              <th>Timing Diff. (CA−TB)</th>
+              <th>DTA/DTL Movement</th>
+              <th>Closing DTA/DTL Bal.</th>
+            </tr>
+          </thead>
+          <tbody id="scheduleBody"></tbody>
+          <tfoot id="scheduleFoot"></tfoot>
+        </table>
+      </div>
+
+      <!-- NOTES -->
+      <div style="margin-top:16px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);font-size:11px;color:var(--text3);line-height:1.7;">
+        <strong style="color:var(--text2)">Notes:</strong>
+        Accounting depreciation follows <strong style="color:var(--text2)">Companies Act 2013 (Schedule II)</strong>.
+        Tax depreciation follows <strong style="color:var(--text2)">Income Tax Act 1961 — Section 32 (WDV block method)</strong>.
+        Deferred tax is computed as per <strong style="color:var(--text2)">Ind AS 12</strong>.
+        <span class="dtl-cell">DTL</span> arises when Tax Dep &gt; Book Dep (CA &gt; TB) — lower tax now, higher later.
+        <span class="dta-cell">DTA</span> arises when Book Dep &gt; Tax Dep (CA &lt; TB) — higher tax now, lower later.
+        Movement column = change in balance year-over-year. Positive = DTL created, Negative = DTA created.
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────
+let scheduleData = [];
+
+// ─── UTILS ───────────────────────────────────────────────
+const fmt = (n) => '₹' + Math.abs(n).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const fmtN = (n) => n.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const fmtSign = (n) => (n >= 0 ? '+' : '−') + fmtN(Math.abs(n));
+
+function v(id) { return document.getElementById(id); }
+function numVal(id) { return parseFloat(v(id).value) || 0; }
+
+// ─── TOGGLE REFS ─────────────────────────────────────────
+function toggleRef() {
+  const p = v('refPanel');
+  const open = p.classList.toggle('open');
+  v('ref-arrow').textContent = open ? '▲' : '▼';
+}
+function toggleRef2() {
+  const p = v('refPanel2');
+  const open = p.classList.toggle('open');
+  v('ref-arrow2').textContent = open ? '▲' : '▼';
+}
+
+function applyRef(rate) {
+  v('taxRate').value = rate;
+  calculate();
+}
+function applyLife(life) {
+  v('usefulLife').value = life;
+  calculate();
+}
+function setTaxRegime(val) {
+  if (val) { v('ctRate').value = val; calculate(); }
+}
+
+// ─── METHOD SWITCH ────────────────────────────────────────
+function switchMethod(radio) {
+  document.querySelectorAll('.radio-opt').forEach(el => el.classList.remove('active'));
+  radio.closest('.radio-opt').classList.add('active');
+  if (radio.value === 'SLM') {
+    v('life-field').style.display = 'block';
+    v('rate-field').style.display = 'none';
+  } else {
+    v('life-field').style.display = 'none';
+    v('rate-field').style.display = 'block';
+  }
+  calculate();
+}
+
+// ─── VALIDATION ───────────────────────────────────────────
+function clearErrors() {
+  document.querySelectorAll('.field.error').forEach(f => f.classList.remove('error'));
+}
+function fieldErr(id, msg) {
+  const f = v(id);
+  f.classList.add('error');
+  f.querySelector('.error-msg').textContent = msg;
+  return false;
+}
+function validateInputs(cost, taxRate, ctRate, method, life, bookRate) {
+  clearErrors();
+  let ok = true;
+  if (!cost || cost <= 0) { fieldErr('f-cost', 'Enter a positive cost.'); ok = false; }
+  if (taxRate < 0 || taxRate > 100) { fieldErr('f-taxrate', 'Rate must be 0–100%.'); ok = false; }
+  if (ctRate <= 0 || ctRate > 60) { fieldErr('f-ctrate', 'Enter tax rate between 0–60%.'); ok = false; }
+  if (method === 'SLM' && (!life || life < 1)) { fieldErr('f-life', 'Useful life must be ≥ 1 year.'); ok = false; }
+  return ok;
+}
+
+// ─── CALCULATE ────────────────────────────────────────────
+function calculate() {
+  const cost    = numVal('cost');
+  const taxRate = numVal('taxRate');
+  const ctRate  = numVal('ctRate');
+  const method  = document.querySelector('input[name="method"]:checked').value;
+  const life    = numVal('usefulLife');
+  const bookRate= numVal('bookRate');
+  const residual= v('residual').value !== '' ? numVal('residual') : cost * 0.05;
+
+  if (!validateInputs(cost, taxRate, ctRate, method, life, bookRate)) {
+    v('emptyState').style.display = 'block';
+    v('results').style.display    = 'none';
+    return;
+  }
+
+  // Determine years to run the schedule
+  let years;
+  if (method === 'SLM') {
+    years = life;
+  } else {
+    // WDV: run until book NBV ≤ residual (max 60 yrs)
+    years = 0;
+    let nbv = cost;
+    while (nbv > residual && years < 60) {
+      nbv = nbv * (1 - bookRate / 100);
+      years++;
+    }
+    if (years === 0) years = 1;
+  }
+
+  // Build schedule
+  const rows = [];
+  let bookNBV   = cost;
+  let taxBase   = cost;
+  let prevDiff  = 0;     // previous closing timing diff
+  let closingBal= 0;     // closing DTA/DTL balance
+
+  // SLM annual depreciation
+  const slmAnnual = method === 'SLM' ? (cost - residual) / life : 0;
+
+  // First year: IT Act half-year rule if asset purchased after Sep 30
+  const dop = v('dop').value;
+  let firstYrFactor = 1;
+  if (dop) {
+    const d = new Date(dop);
+    // If purchase after Sep 30 → only half-year tax dep in first year
+    if (d.getMonth() >= 9) firstYrFactor = 0.5;
+  }
+
+  let totalBookDep = 0, totalTaxDep = 0;
+
+  for (let yr = 1; yr <= years; yr++) {
+    const openNBV  = bookNBV;
+    const openTax  = taxBase;
+
+    // Book depreciation
+    let bookDep;
+    if (method === 'SLM') {
+      bookDep = Math.min(slmAnnual, bookNBV - residual);
+    } else {
+      bookDep = openNBV * (bookRate / 100);
+      bookDep = Math.min(bookDep, openNBV - residual);
+    }
+    bookDep = Math.max(bookDep, 0);
+
+    // Tax depreciation (WDV always, IT Act)
+    const factor = (yr === 1 && firstYrFactor === 0.5) ? 0.5 : 1;
+    let taxDep = openTax * (taxRate / 100) * factor;
+    taxDep = Math.max(taxDep, 0);
+
+    const closeNBV = openNBV - bookDep;
+    const closeTax = openTax - taxDep;
+    const timingDiff = closeNBV - closeTax;   // CA - TB
+    const prevClosing = closingBal;
+
+    // DTA/DTL balance
+    const newBalance  = timingDiff * (ctRate / 100);  // +ve = DTL, -ve = DTA
+    const movement    = newBalance - closingBal;
+    closingBal        = newBalance;
+
+    rows.push({
+      yr, openNBV, bookDep, closeNBV,
+      openTax, taxDep, closeTax,
+      timingDiff, movement, closingBal
+    });
+
+    bookNBV = closeNBV;
+    taxBase = closeTax;
+    totalBookDep += bookDep;
+    totalTaxDep  += taxDep;
+  }
+
+  scheduleData = rows;
+
+  // Current year values (year 1 for summary)
+  const cur = rows[rows.length > 0 ? 0 : 0];
+  const last = rows[rows.length - 1];
+
+  // Update banner
+  const finalBal = last.closingBal;
+  const isDTL = finalBal > 0;
+  const isDTA = finalBal < 0;
+  const assetName = v('assetName').value || 'Asset';
+
+  const banner = v('dtaBanner');
+  banner.className = 'dta-dtl-banner ' + (isDTL ? 'dtl' : isDTA ? 'dta' : 'neutral');
+  v('bannerType').className = 'banner-type ' + (isDTL ? 'dtl' : isDTA ? 'dta' : '');
+  v('bannerType').textContent = isDTL ? 'Deferred Tax Liability (DTL)' : isDTA ? 'Deferred Tax Asset (DTA)' : 'No Deferred Tax';
+  v('bannerAmount').className = 'banner-amount ' + (isDTL ? 'dtl' : isDTA ? 'dta' : '');
+  v('bannerAmount').textContent = fmt(finalBal);
+  v('bannerDesc').textContent = isDTL
+    ? `Tax depreciation exceeds book depreciation. ${assetName} will generate higher tax outflow in later years.`
+    : isDTA
+    ? `Book depreciation exceeds tax depreciation. ${assetName} has pre-paid taxes recoverable in later years.`
+    : 'No timing difference between book and tax depreciation.';
+  const badge = v('bannerBadge');
+  badge.className = 'banner-badge ' + (isDTL ? 'dtl' : isDTA ? 'dta' : '');
+  badge.textContent = isDTL ? 'Recognise as DTL' : isDTA ? 'Recognise as DTA' : '—';
+
+  // Summary cards
+  v('cardCA').textContent = fmt(last.closeNBV);
+  v('cardTB').textContent = fmt(last.closeTax);
+  v('cardDiff').textContent = (last.timingDiff >= 0 ? '' : '(') + fmt(last.timingDiff) + (last.timingDiff < 0 ? ')' : '');
+  v('cardDiff').style.color = last.timingDiff > 0 ? 'var(--red)' : last.timingDiff < 0 ? 'var(--green)' : 'var(--text)';
+  v('cardDiffSub').textContent = last.timingDiff > 0 ? 'CA > TB → DTL' : last.timingDiff < 0 ? 'CA < TB → DTA' : 'No difference';
+
+  v('cardDTLabel').textContent = isDTL ? 'Deferred Tax Liability' : isDTA ? 'Deferred Tax Asset' : 'Deferred Tax';
+  v('cardDT').textContent = fmt(finalBal);
+  v('cardDT').style.color = isDTL ? 'var(--red)' : isDTA ? 'var(--green)' : 'var(--text)';
+  v('cardDTSub').textContent = `|${fmtN(Math.abs(last.timingDiff))}| × ${ctRate}%`;
+
+  v('cardDTBox').className = 'card ' + (isDTL ? 'red' : isDTA ? 'green' : '');
+  v('cardDiffBox').className = 'card ' + (isDTL ? 'red' : isDTA ? 'green' : '');
+
+  // Table title
+  v('tableTitle').textContent = `Deferred Tax Schedule — ${assetName}`;
+  v('tableSub').textContent = `${method} (Book) · WDV @ ${taxRate}% (Tax) · Effective Tax Rate: ${ctRate}% · ${years} year(s)`;
+
+  // Build table rows
+  const tbody = v('scheduleBody');
+  tbody.innerHTML = '';
+  rows.forEach(r => {
+    const isDTLRow = r.timingDiff > 0;
+    const isDTARow = r.timingDiff < 0;
+    const balClass = r.closingBal > 0 ? 'dtl-cell' : r.closingBal < 0 ? 'dta-cell' : 'zero-cell';
+    const movClass = r.movement > 0 ? 'dtl-cell' : r.movement < 0 ? 'dta-cell' : 'zero-cell';
+    const diffClass = r.timingDiff > 0 ? 'positive-diff' : r.timingDiff < 0 ? 'negative-diff' : 'zero-cell';
+    tbody.innerHTML += `
+      <tr>
+        <td>Year ${r.yr}</td>
+        <td>${fmtN(r.openNBV)}</td>
+        <td>(${fmtN(r.bookDep)})</td>
+        <td>${fmtN(r.closeNBV)}</td>
+        <td>${fmtN(r.openTax)}</td>
+        <td>(${fmtN(r.taxDep)})</td>
+        <td>${fmtN(r.closeTax)}</td>
+        <td class="${diffClass}">${fmtN(r.timingDiff)}</td>
+        <td class="${movClass}">${fmtN(r.movement)}</td>
+        <td class="${balClass}">${fmtN(r.closingBal)}</td>
+      </tr>`;
+  });
+
+  // Footer totals
+  const tfoot = v('scheduleFoot');
+  tfoot.innerHTML = `<tr>
+    <td>Total</td>
+    <td>—</td>
+    <td>(${fmtN(totalBookDep)})</td>
+    <td>—</td>
+    <td>—</td>
+    <td>(${fmtN(totalTaxDep)})</td>
+    <td>—</td>
+    <td class="${finalBal > 0 ? 'dtl-cell' : finalBal < 0 ? 'dta-cell' : ''}">${fmtN(last.timingDiff)}</td>
+    <td>—</td>
+    <td class="${finalBal > 0 ? 'dtl-cell' : finalBal < 0 ? 'dta-cell' : ''}">${fmtN(finalBal)}</td>
+  </tr>`;
+
+  v('emptyState').style.display = 'none';
+  v('results').style.display    = 'block';
+}
+
+// ─── CSV EXPORT ──────────────────────────────────────────
+function exportCSV() {
+  if (!scheduleData.length) { alert('Generate a schedule first.'); return; }
+  const headers = ['Year','Opening NBV (Book)','Book Depreciation','Closing NBV (Book)',
+                   'Opening Tax Base','Tax Depreciation','Closing Tax Base',
+                   'Timing Difference','DTA/DTL Movement','Closing Balance'];
+  const rows = scheduleData.map(r => [
+    `Year ${r.yr}`,
+    r.openNBV.toFixed(2), r.bookDep.toFixed(2), r.closeNBV.toFixed(2),
+    r.openTax.toFixed(2), r.taxDep.toFixed(2), r.closeTax.toFixed(2),
+    r.timingDiff.toFixed(2), r.movement.toFixed(2), r.closingBal.toFixed(2)
+  ]);
+  const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `DTA_DTL_Schedule_${v('assetName').value || 'Asset'}.csv`;
+  a.click();
+}
+
+// ─── INIT ─────────────────────────────────────────────────
+window.onload = () => {
+  v('dop').valueAsDate = new Date();
+  // Set sensible defaults for a demo
+  v('cost').value      = 1000000;
+  v('usefulLife').value= 15;
+  v('taxRate').value   = 15;
+  v('ctRate').value    = 25.168;
+  v('assetName').value = 'Plant & Machinery';
+  calculate();
+};
+</script>
+</body>
+</html>
